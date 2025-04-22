@@ -19,11 +19,14 @@ load_dotenv()
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
 EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+try:
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+except ValueError:
+    raise ValueError("⚠️ El secret SMTP_PORT está mal configurado o vacío. Debe ser un número.")
+
 SMTP_PASS = os.getenv("SMTP_PASS")
 OPENAI_KEY = os.getenv("OPENAI_KEY")
 client = OpenAI(api_key=OPENAI_KEY)
-
 STATE_FILE = "state.json"
 KEYWORDS = ["natural", "cruelty-free", "serum", "acne", "spf", "cleanser", "toner", "hydrating", "retinol"]
 EXCLUDED_KEYWORDS = ["revista", "editorial", "celebridad", "evento", "caras", "glamour"]
@@ -132,9 +135,12 @@ def send_email(subject, body):
     # Agregamos una nota anti-spam al final del contenido
     body += "\n\n📩 Consejo BB Bot: Para que nuestras recomendaciones no terminen en spam, agréganos a tus contactos."
 
+    # Convertir múltiples correos separados por coma en lista
+    to_list = [email.strip() for email in EMAIL_RECEIVER.split(",")]
+
     msg = MIMEMultipart()
     msg["From"] = formataddr(("Skincare Bot", EMAIL_SENDER))
-    msg["To"] = EMAIL_RECEIVER
+    msg["To"] = ", ".join(to_list)  # Para que aparezcan todos en el header
     msg["Subject"] = subject
     msg["Reply-To"] = EMAIL_SENDER
     msg["X-Priority"] = "3"
@@ -144,9 +150,9 @@ def send_email(subject, body):
     with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
         server.starttls()
         server.login(EMAIL_SENDER, SMTP_PASS)
-        server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
+        server.sendmail(EMAIL_SENDER, to_list, msg.as_string())
 
-    log("📬 Correo enviado")
+    log("📬 Correo enviado a: " + ", ".join(to_list))
 
 # MAIN
 def main():
