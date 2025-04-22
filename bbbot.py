@@ -35,7 +35,13 @@ EXCLUDED_KEYWORDS = ["revista", "editorial", "celebridad", "evento", "caras", "g
 def log(msg): print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 def load_state(): return json.load(open(STATE_FILE)) if os.path.exists(STATE_FILE) else {"history": []}
 def save_state(state): json.dump(state, open(STATE_FILE, "w"), indent=4)
-def is_duplicate(product, state): return product.lower() in (p.lower() for p in state["history"])
+def normalize(text):
+    return text.lower().strip().replace("’", "'").replace("“", '"').replace("”", '"')
+
+def is_duplicate(product_name, state):
+    norm_name = normalize(product_name)
+    return any(normalize(p) == norm_name for p in state["history"])
+
 def is_valid_entry(title): 
     title = title.lower()
     return any(k in title for k in KEYWORDS) and not any(x in title for x in EXCLUDED_KEYWORDS)
@@ -176,9 +182,14 @@ def main():
     body = generate_newsletter(pick)
     send_email("✨ Tu producto natural de skincare del día", body)
 
-    state["history"].append(pick["product"])
+    # Guardar el producto normalizado
+    norm_product = normalize(pick["product"])
+    log(f"📝 Guardando en historial: {norm_product}")
+    state["history"].append(norm_product)
+
     save_state(state)
     log("✅ Todo listo.")
+
 
 if __name__ == "__main__":
     main()
