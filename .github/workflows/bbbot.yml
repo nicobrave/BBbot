@@ -11,17 +11,10 @@ jobs:
 
     steps:
       - name: Clonar repositorio
-        uses: actions/checkout@v3
-
-      - name: Recuperar historial anterior
-        uses: actions/download-artifact@v4
-        with:
-          name: state
-          path: .
-        continue-on-error: true
+        uses: actions/checkout@v4
 
       - name: Configurar Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -30,18 +23,36 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Recuperar historial anterior
+        uses: actions/download-artifact@v4
+        with:
+          name: state
+          path: .
+        continue-on-error: true
+
+      - name: Verificar día de la semana
+        run: |
+          echo "Día de la semana: $(date +%A)"
+          echo "Hora local: $(date)"
+
       - name: Ejecutar BB Bot
         env:
           OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
           EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
           SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
-        run: python bbbot.py
+        run: |
+          python bbbot.py
+          cat bbbot.log
 
-      - name: Guardar historial actualizado (state.json)
+      - name: Guardar historial actualizado
         uses: actions/upload-artifact@v4
         with:
           name: state
-          path: state.json
+          path: |
+            state.json
+            perplexity_response.json
+          retention-days: 7

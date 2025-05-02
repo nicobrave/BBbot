@@ -1,73 +1,113 @@
 import os
+import json
 import requests
-import re
+from datetime import datetime
 from dotenv import load_dotenv
-from openai import OpenAI
 
+# Configuración
 load_dotenv()
-OPENAI_KEY = os.getenv("OPENAI_KEY")
-BRAVE_API_KEY = os.getenv("BRAVE_API_KEY")
-client = OpenAI(api_key=OPENAI_KEY)
+PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
+PERPLEXITY_SAVE_FILE = "perplexity_response.json"
 
-def extract_query(text):
-    lines = text.strip().splitlines()
-    for line in lines:
-        if "site:" in line or any(site in line for site in [
-            "sephora.com", "byrdie.com", "allure.com", "sokoglam.com", "ultabeauty.com", "cultbeauty.com"
-        ]):
-            return line.strip()
-    return lines[-1].strip()
+def log(msg):
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
-def generate_query():
-    prompt = (
-        "Redacta solo una línea de consulta para buscador. Sin explicación. "
-        "Debe buscar productos de skincare específicos, nuevos o en tendencia en 2024, naturales y cruelty-free. "
-        "Limita la búsqueda a:\n"
-        "site:sephora.com OR site:byrdie.com/skin-4628389 OR site:allure.com OR site:sokoglam.com OR site:ultabeauty.com OR site:cultbeauty.com"
-    )
-    res = client.chat.completions.create(
-        model="gpt-4.1-2025-04-14",
-        messages=[{"role": "system", "content": "Query generator experto."},
-                  {"role": "user", "content": prompt}],
-        temperature=0.2,
-        max_tokens=150
-    )
-    return extract_query(res.choices[0].message.content)
-
-def brave_search(query):
+def search_skincare_products():
+    query = """
+    Proporciona información en formato JSON sobre 3 productos de skincare naturales y cruelty-free de 2025,
+    disponibles en Sephora o Byrdie, con esta estructura exacta:
+    {
+      "productos": [
+        {
+          "nombre": "Nombre del producto",
+          "marca": "Marca",
+          "descripcion": "Descripción técnica",
+          "ingredientes": "Ingredientes clave",
+          "precio": "Precio aproximado",
+          "url": "Enlace al producto",
+          "tipo_piel": "Tipo de piel recomendado",
+          "fecha_lanzamiento": "2025"
+        }
+      ]
+    }
+    """
+    
     headers = {
-        "Accept": "application/json",
-        "X-Subscription-Token": BRAVE_API_KEY,
+        "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+        "Content-Type": "application/json"
     }
-    params = {
-        "q": query,
-        "count": 10,
-        "safesearch": "moderate",
-        "freshness": "day"
+    
+    # Payload CORREGIDO según última documentación de Perplexity
+    payload = {
+        "model": "sonar",  # Modelo actualmente funcional
+        "messages": [{
+            "role": "user",
+            "content": query
+        }],
+        "temperature": 0.3  # Menor variabilidad para mejor estructura
     }
-    r = requests.get("https://api.search.brave.com/res/v1/web/search", headers=headers, params=params)
-    r.raise_for_status()
-    return r.json().get("web", {}).get("results", [])
 
-def run():
-    print("🔧 Generando query...")
-    query = generate_query()
-    print(f"\n✅ QUERY USADA:\n{query}")
+    try:
+        log("Realizando búsqueda en Perplexity API...")
+        response = requests.post(
+            "https://api.perplexity.ai/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=60
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            with open(PERPLEXITY_SAVE_FILE, 'w') as f:
+                json.dump(data, f, indent=2)
+            return data
+        else:
+            log(f"Error en API (HTTP {response.status_code}): {response.text}")
+            return None
+            
+    except Exception as e:
+        log(f"Error de conexión: {str(e)}")
+        return None
 
-    print("\n🔍 Consultando Brave Search...")
-    results = brave_search(query)
-
-    if not results:
-        print("\n❌ No se encontraron resultados.")
-        return
-
-    print(f"\n🎯 {len(results)} resultados:")
-    for r in results:
-        print("—" * 40)
-        print("🧴", r.get("title", "").strip())
-        print(r.get("description", "").strip())
-        print(r.get("url", ""))
-        print()
+def extract_products_from_response(data):
+    """Extrae productos del contenido de la respuesta"""
+    try:
+        content = data['choices'][0]['message']['content']
+        
+        # Buscar JSON embebido (método robusto)
+        json_start = content.find('{')
+        json_end = content.rfind('}') + 1
+        json_str = content[json_start:json_end]
+        
+        products_data = json.loads(json_str)
+        return products_data.get('productos', [])
+        
+    except json.JSONDecodeError:
+        log("El contenido no contiene JSON válido. Respuesta completa:")
+        log(content)
+        return []
+    except Exception as e:
+        log(f"Error procesando respuesta: {str(e)}")
+        return []
 
 if __name__ == "__main__":
-    run()
+    log("Iniciando BB Beauty Bot - Versión Estable")
+    
+    # Paso 1: Búsqueda de productos
+    api_response = search_skincare_products()
+    
+    if api_response:
+        # Paso 2: Extracción de productos
+        productos = extract_products_from_response(api_response)
+        
+        if productos:
+            log("\n✅ Productos encontrados:")
+            for idx, prod in enumerate(productos, 1):
+                print(f"\n#{idx} {prod.get('nombre', 'Sin nombre')}")
+                print(f"🏭 Marca: {prod.get('marca', 'Desconocida')}")
+                print(f"💰 Precio: {prod.get('precio', 'N/A')}")
+                print(f"🔗 Enlace: {prod.get('url', 'N/A')}")
+        else:
+            log("⚠️ No se encontraron productos en la respuesta")
+    else:
+        log("❌ No se pudo completar la búsqueda")
