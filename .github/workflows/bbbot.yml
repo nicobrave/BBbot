@@ -46,7 +46,6 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
         run: |
           python bbbot.py
-          cat bbbot.log
 
       - name: Guardar historial actualizado
         uses: actions/upload-artifact@v4
