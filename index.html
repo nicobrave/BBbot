@@ -174,7 +174,7 @@
         const submitButton = document.getElementById('submit-button');
         const emailInput = document.getElementById('email');
 
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby7BX2tGDbdW0rjXlDUFci0vVESXx2l_8wIxZNc6FF77t6CvMvxoI0rWrxkH5tYKp8ttg/exec';
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxpayPrvd3I5k6kF3p8JTK1QDV5gWYTPBWDCHTXfcu6jvOeue_i-BejfXEieqoqBu3FiQ/exec';
 
         form.addEventListener('submit', function(e) {
             e.preventDefault();
@@ -182,20 +182,24 @@
             submitButton.disabled = true;
             submitButton.innerText = 'Procesando...';
 
+            // Usamos FormData para enviar los datos como un formulario tradicional.
+            // Esto evita la solicitud de "preflight" CORS.
+            const formData = new FormData(form);
+
             fetch(SCRIPT_URL, {
                 method: 'POST',
-                mode: 'cors',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: emailInput.value }),
+                body: formData,
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.result === 'success') {
+            .then(response => {
+                // Para este método, la respuesta puede no ser JSON,
+                // así que solo verificamos si la solicitud fue exitosa.
+                if (response.ok) {
                     messageDiv.style.color = 'var(--purple)';
                     messageDiv.innerText = '¡Gracias por unirte! Revisa tu correo.';
                     emailInput.value = '';
                 } else {
-                    throw new Error(data.message || 'Ocurrió un error.');
+                    // Si el servidor responde con un error, lo lanzamos.
+                    throw new Error('Respuesta del servidor no fue OK.');
                 }
             })
             .catch(error => {
