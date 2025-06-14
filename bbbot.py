@@ -45,12 +45,16 @@ def get_subscribers_from_sheet() -> List[str]:
     """
     log("Accediendo a Google Sheets para obtener suscriptores...", "info")
     try:
-        scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+        # Definir los scopes necesarios. Necesitamos leer hojas de cálculo.
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets.readonly",
+            "https://www.googleapis.com/auth/drive.readonly"
+        ]
         creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=scopes)
         client = gspread.authorize(creds)
         
         spreadsheet = client.open(GOOGLE_SHEET_NAME)
-        worksheet = spreadsheet.sheet1 # Accede a la primera hoja
+        worksheet = spreadsheet.worksheet("Hoja 1") # Es más seguro abrir la pestaña por nombre
         
         # Asume que los correos están en la columna 2 (B). Omite la primera fila (encabezado).
         emails = worksheet.col_values(2)[1:]
@@ -60,6 +64,9 @@ def get_subscribers_from_sheet() -> List[str]:
         return valid_emails
     except FileNotFoundError:
         log(f"Error: El archivo de credenciales '{CREDENTIALS_FILE}' no fue encontrado.", "error")
+        return []
+    except gspread.exceptions.WorksheetNotFound:
+        log("Error: La pestaña 'Hoja 1' no fue encontrada. Asegúrate de que el nombre sea correcto.", "error")
         return []
     except Exception as e:
         log(f"Error al conectar con Google Sheets: {e}", "error")
