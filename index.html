@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BB Beauty Bot - Skincare Inteligente, Análisis Honesto</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --pink: #ff69b4;
+            --purple: #a162f7;
+            --light-bg: #fdf2f8;
+            --text-dark: #1a0a2e;
+            --white: #ffffff;
+            --glow: 0 0 20px rgba(255, 105, 180, 0.5), 0 0 30px rgba(161, 98, 247, 0.4);
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            margin: 0;
+            padding: 0;
+            color: var(--text-dark);
+            background-color: var(--light-bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden; /* Para que el fondo animado no genere scrollbars */
+        }
+
+        .background-glow {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            /* Usamos la imagen generativa como fondo principal */
+            background-image: url('background.jpeg'); /* <<-- REEMPLAZA 'background.jpg' CON EL NOMBRE DE TU IMAGEN */
+            background-size: cover;
+            background-position: center;
+            /* Y añadimos un gradiente animado por encima para el efecto "glow" */
+            animation: gradient-flow 20s ease infinite;
+        }
+
+        @keyframes gradient-flow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 20px;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+            animation: fade-in-up 1s ease-out;
+        }
+        
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        header h1 {
+            font-size: clamp(2rem, 10vw, 3rem);
+            font-weight: 800;
+            color: var(--text-dark);
+            margin: 0;
+            line-height: 1.1;
+        }
+
+        p.subtitle {
+            font-size: clamp(1rem, 4vw, 1.1rem);
+            color: var(--purple);
+            margin: 15px 0 30px;
+            font-weight: 700;
+        }
+
+        p.description {
+            color: #4c3f5c;
+            line-height: 1.7;
+        }
+
+        form {
+            margin-top: 30px;
+        }
+
+        input[type="email"] {
+            width: calc(100% - 32px);
+            padding: 16px;
+            border: 1px solid #e0cff0;
+            border-radius: 12px;
+            font-size: 1rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        input[type="email"]:focus {
+            outline: none;
+            border-color: var(--purple);
+            box-shadow: 0 0 15px rgba(161, 98, 247, 0.3);
+        }
+
+        button {
+            width: 100%;
+            margin-top: 15px;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(45deg, var(--purple), var(--pink));
+            color: var(--white);
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--glow);
+        }
+
+        #form-message {
+            margin-top: 20px;
+            font-weight: 700;
+            min-height: 24px;
+        }
+        
+        .footer {
+            margin-top: 30px;
+            font-size: 0.8rem;
+            color: #b3a7c4;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="background-glow"></div>
+
+    <div class="container">
+        <header>
+            <h1>Skincare que tiene sentido.</h1>
+            <p class="subtitle">Análisis honestos. Ingredientes claros. Consejos reales.</p>
+        </header>
+        
+        <main>
+            <p class="description">Cada día, nuestro bot de IA analiza un producto de skincare innovador y te lo explica de forma simple y directa. Sin sesgos. Sin publicidad. Recibe gratis tu dosis de ciencia en tu correo.</p>
+            
+            <form id="subscription-form">
+                <input type="email" id="email" name="email" placeholder="tu.email@ejemplo.com" required>
+                <button type="submit" id="submit-button">Únete a la Revolución del Skincare</button>
+            </form>
+            <div id="form-message"></div>
+        </main>
+        
+        <footer class="footer">
+            <p>&copy; 2024 BB Beauty Bot por recomai.cl</p>
+        </footer>
+    </div>
+
+    <script>
+        const form = document.getElementById('subscription-form');
+        const messageDiv = document.getElementById('form-message');
+        const submitButton = document.getElementById('submit-button');
+        const emailInput = document.getElementById('email');
+
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzcEw-O33xqm7ColyM7gaqr5X9i2wdMSkFKguYLGH3FD7AYDmtTOIemmxGsPA0P3fC_jg/exec';
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            submitButton.disabled = true;
+            submitButton.innerText = 'Procesando...';
+
+            fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: emailInput.value }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.result === 'success') {
+                    messageDiv.style.color = 'var(--purple)';
+                    messageDiv.innerText = '¡Gracias por unirte! Revisa tu correo.';
+                    emailInput.value = '';
+                } else {
+                    throw new Error(data.message || 'Ocurrió un error.');
+                }
+            })
+            .catch(error => {
+                messageDiv.style.color = 'red';
+                messageDiv.innerText = 'Hubo un problema. Inténtalo de nuevo.';
+                console.error('Error:', error);
+            })
+            .finally(() => {
+                submitButton.disabled = false;
+                submitButton.innerText = 'Únete a la Revolución del Skincare';
+            });
+        });
+    </script>
+
+</body>
+</html> 

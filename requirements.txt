@@ -1,6 +1,9 @@
-openai>=1.0
+# python-dotenv para leer el .env
+python-dotenv
+# Librería de Google para Gemini
+google-generativeai
+# Para hacer llamadas HTTP (si es necesario en el futuro)
 requests
 feedparser
 beautifulsoup4
-python-dotenv
 certifi

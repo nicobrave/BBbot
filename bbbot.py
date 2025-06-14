@@ -1,346 +1,215 @@
 import os
 import json
 import smtplib
-import requests
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr
-from openai import OpenAI
 from dotenv import load_dotenv
+import google.generativeai as genai
 from typing import List, Dict, Optional
 
 # --- Configuración ---
 load_dotenv()
 
-# Credenciales
+# API Keys y Credenciales
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
 EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
 SMTP_SERVER = os.getenv("SMTP_SERVER")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 SMTP_PASS = os.getenv("SMTP_PASS")
-OPENAI_KEY = os.getenv("OPENAI_KEY")
-PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 
-# Clients
-client = OpenAI(api_key=OPENAI_KEY)
+# Configurar el cliente de Gemini
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 # Archivos
-STATE_FILE = "state.json"
-PERPLEXITY_SAVE_FILE = "perplexity_response.json"
-ENRICHED_DATA_FILE = "enriched_products.json"
+WEEKLY_PRODUCTS_FILE = "weekly_products.json"
 
 # --- Utilidades ---
 def log(msg: str, level: str = "info"):
+    """Función de logging simple que imprime en consola."""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] {msg}")
+    print(f"[{timestamp}] [{level.upper()}] {msg}")
 
-def load_state() -> dict:
-    try:
-        if os.path.exists(STATE_FILE):
-            with open(STATE_FILE, 'r') as f:
-                return json.load(f)
-    except Exception as e:
-        log(f"Error loading state: {str(e)}", "error")
-    return {"history": [], "last_run": None}
+# --- Agente de Búsqueda con Gemini ---
+def find_products_with_gemini() -> bool:
+    """
+    Usa Gemini para encontrar 5 productos de skincare innovadores y los guarda en un archivo JSON.
+    Retorna True si la operación fue exitosa, False en caso contrario.
+    """
+    if not GEMINI_API_KEY:
+        log("GEMINI_API_KEY no está configurada. No se puede realizar la búsqueda.", "error")
+        return False
 
-def save_state(state: dict):
-    try:
-        with open(STATE_FILE, 'w') as f:
-            json.dump(state, f, indent=4)
-    except Exception as e:
-        log(f"Error saving state: {str(e)}", "error")
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    prompt = """
+    Eres un experto en investigación de mercado de skincare de lujo.
+    Realiza una investigación profunda y encuentra los 5 productos de skincare más innovadores y prometedores del último año (2024-2025).
+    Prioriza productos con ingredientes patentados, tecnología novedosa o resultados clínicos demostrables.
 
-def normalize(text: str) -> str:
-    return text.lower().strip()
-
-def is_duplicate(url: str, state: dict) -> bool:
-    return normalize(url) in [normalize(u) for u in state["history"]]
-
-# --- Agente 1: Buscador de Productos ---
-def find_product_urls() -> List[str]:
-    """Busca productos de skincare innovadores usando Sonar Deep Research"""
-    if not PERPLEXITY_API_KEY:
-        log("Error: API key no configurada", "error")
-        return []
-        
-    # Verificar si es lunes
-    today = datetime.now().weekday()
-    if today != 0:  # 0 es lunes
-        log("No es lunes, usando datos existentes", "info")
-        try:
-            with open(PERPLEXITY_SAVE_FILE, 'r') as f:
-                products = json.load(f)
-                log(f"Usando {len(products)} productos existentes")
-                return [p['url'] for p in products]
-        except Exception as e:
-            log(f"Error cargando datos existentes: {str(e)}", "error")
-            return []
-        
-    query = """
-    Proporciona información en formato JSON sobre 5 productos de skincare innovadores de 2024-2025,
-    con esta estructura exacta:
+    Para cada producto, proporciona la información en un objeto JSON con esta estructura exacta:
     {
-      "productos": [
-        {
-          "nombre": "Nombre del producto",
-          "marca": "Marca",
-          "descripcion": "Descripción técnica detallada",
-          "ingredientes": ["Lista de ingredientes clave"],
-          "tecnologia": "Tecnología o innovación principal",
-          "beneficios": ["Lista de beneficios principales"],
-          "precio": "Precio aproximado",
-          "url": "Enlace oficial al producto",
-          "tipo_piel": "Tipo de piel recomendado",
-          "fecha_lanzamiento": "2024-2025",
-          "estudios_clinicos": "Información sobre estudios clínicos si aplica",
-          "sostenibilidad": "Información sobre sostenibilidad"
-        }
-      ]
+      "nombre": "string",
+      "marca": "string",
+      "descripcion": "string (descripción técnica detallada de 100-150 palabras)",
+      "ingredientes": ["string", "string", "string"],
+      "tecnologia": "string (innovación principal)",
+      "beneficios": ["string", "string", "string"],
+      "precio": "string (ej. USD 80-95)",
+      "url": "string (URL oficial del producto)",
+      "tipo_piel": "string",
+      "estudios_clinicos": "string (resumen breve si aplica)",
+      "sostenibilidad": "string (detalles sobre empaque o ingredientes si aplica)"
     }
+    Devuelve SÓLO un array JSON que contenga 5 de estos objetos. No incluyas "```json" ni nada más que el array.
     """
     
+    log("Iniciando búsqueda de productos con Gemini...", "info")
     try:
-        response = requests.post(
-            "https://api.perplexity.ai/chat/completions",
-            headers={"Authorization": f"Bearer {PERPLEXITY_API_KEY}"},
-            json={
-                "model": "sonar-deep-research",
-                "messages": [{"role": "user", "content": query}],
-                "temperature": 0.3,
-                "max_tokens": 4000
-            },
-            timeout=900
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            content = data['choices'][0]['message']['content']
-            
-            # Extraer JSON de la respuesta
-            json_start = content.find('{')
-            json_end = content.rfind('}') + 1
-            if json_start == -1 or json_end == 0:
-                log("No se encontró formato JSON válido", "error")
-                return []
-                
-            products_data = json.loads(content[json_start:json_end])
-            products = products_data.get('productos', [])
-            
-            # Guardar la respuesta completa
-            with open(PERPLEXITY_SAVE_FILE, 'w') as f:
-                json.dump(products, f, indent=4)
-                
-            log(f"Encontrados {len(products)} productos innovadores")
-            return [p['url'] for p in products]
-            
-        log(f"Error API: {response.status_code}", "error")
-        return []
-        
+        response = model.generate_content(prompt)
+        # Limpiar la respuesta para asegurar que sea un JSON válido
+        cleaned_response = response.text.strip().replace("```json", "").replace("```", "")
+        products = json.loads(cleaned_response)
+
+        if isinstance(products, list) and len(products) > 0:
+            with open(WEEKLY_PRODUCTS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(products, f, indent=4, ensure_ascii=False)
+            log(f"Búsqueda exitosa. Se guardaron {len(products)} productos.", "info")
+            return True
+        else:
+            log("La respuesta de Gemini no contenía una lista de productos válida.", "error")
+            return False
+
     except Exception as e:
-        log(f"Error en investigación: {str(e)}", "error")
-        return []
+        log(f"Error durante la búsqueda con Gemini: {e}", "error")
+        return False
 
-# --- Versión de Prueba ---
-if __name__ == "__main__":
-    print("=== Prueba de Búsqueda ===")
-    urls = find_product_urls()
+# --- Agente de Contenido con Gemini ---
+def generate_newsletter_with_gemini(product: Dict) -> str:
+    """Genera el contenido del newsletter con un enfoque educativo y accesible."""
+    if not GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY no está configurada.")
+
+    model = genai.GenerativeModel('gemini-1.5-flash')
     
-    if urls:
-        print("\nURLs encontradas:")
-        for url in urls:
-            print(f"- {url}")
-    else:
-        print("No se encontraron URLs válidas")
+    # Construcción dinámica de la lista de ingredientes para el prompt
+    ingredients_list_html = ""
+    for ing in product.get('ingredientes', []):
+        ingredients_list_html += f"<li><b>{ing}:</b> [Explica de forma sencilla y directa qué hace este ingrediente por la piel. Evita la jerga técnica.]</li>"
 
-# --- Agente de Generación de Contenido ---
-def generate_newsletter(product_data: Dict) -> str:
-    """Genera contenido premium para el newsletter de un producto"""
-    if not OPENAI_KEY:
-        log("Error: API key no configurada", "error")
-        raise ValueError("API key no configurada")
-        
     prompt = f"""
-    Eres un experto en belleza con 15 años de experiencia en análisis de productos premium.
-    Crea un análisis detallado y exclusivo sobre este producto de skincare, SOLO usando HTML puro (no uses Markdown, ni #, ni **, ni *). Usa etiquetas <h1>, <h2>, <ul>, <li>, <p> y <br> para el formato. Asegúrate de que los títulos sean claros, grandes y coloridos, y que haya buen espaciado entre secciones. No uses ningún símbolo de Markdown.
+    Eres un divulgador experto en cuidado de la piel. Tu misión es educar de forma clara, sencilla y confiable.
+    No uses lenguaje publicitario ni demasiado técnico. El tono debe ser como el de un amigo experto que da buenos consejos.
+    Crea un análisis del siguiente producto usando únicamente etiquetas HTML para el formato. No uses Markdown (#, *, etc.).
 
-    Producto: {product_data['nombre']}
-    Marca: {product_data['marca']}
-    Precio: {product_data['precio']}
-    Tecnología: {product_data['tecnologia']}
-    Descripción: {product_data['descripcion']}
-    Ingredientes Clave: {', '.join(product_data['ingredientes'])}
-    Beneficios: {', '.join(product_data['beneficios'])}
-    Tipo de Piel: {product_data['tipo_piel']}
-    Estudios Clínicos: {product_data['estudios_clinicos']}
-    Sostenibilidad: {product_data['sostenibilidad']}
+    **Producto a analizar:**
+    - Nombre: {product.get('nombre', 'N/A')}
+    - Marca: {product.get('marca', 'N/A')}
 
-    Estructura del análisis:
-    <h1>Título Impactante (debe incluir "BB Beauty Bot" y ser de 8 palabras)</h1>
-    <h2>Introducción</h2>
-    <p>Contexto del mercado y posición del producto</p>
-    <h2>Análisis Técnico Profundo</h2>
-    <ul>
-        <li>Desglose de ingredientes clave</li>
-        <li>Comparación con tecnologías similares</li>
-        <li>Efectividad científica</li>
-    </ul>
-    <h2>Beneficios Exclusivos</h2>
-    <ul>
-        <li>Resultados esperados</li>
-        <li>Diferenciadores únicos</li>
-        <li>Casos de uso específicos</li>
-    </ul>
-    <h2>Guía de Uso Premium</h2>
-    <ul>
-        <li>Protocolo de aplicación</li>
-        <li>Combinaciones sinérgicas</li>
-        <li>Consejos de expertos</li>
-    </ul>
-    <h2>Valoración Experta</h2>
-    <ul>
-        <li>Puntos fuertes</li>
-        <li>Áreas de mejora</li>
-        <li>Comparativa con competidores</li>
-    </ul>
-    <h2>Conclusión y Recomendación</h2>
-    <p>Recomendación final y cierre</p>
+    **Estructura HTML requerida:**
+    <h1>{product.get('marca', 'Marca')} - {product.get('nombre', 'Nombre del Producto')}</h1>
+    
+    <h2>💡 ¿Qué es y qué lo hace especial?</h2>
+    <p>{product.get('descripcion', 'Descripción no disponible.')}</p>
+    
+    <hr style="border: 1px solid #f0eafc; margin: 30px 0;">
 
-    Estilo:
-    - Profesional, creativo y visualmente atractivo
-    - Títulos y subtítulos destacados con <h1> y <h2>
-    - Listas con <ul> y <li> y emojis si es relevante
-    - Usa <p> para párrafos y <br> para separar bloques de texto
-    - No uses #, *, ni ningún símbolo de Markdown
+    <h2>🔬 Análisis de Ingredientes y Beneficios</h2>
+    <p>Estos son los ingredientes clave y lo que realmente hacen por tu piel:</p>
+    <ul>
+        {ingredients_list_html}
+    </ul>
+
+    <hr style="border: 1px solid #f0eafc; margin: 30px 0;">
+
+    <h2>⚠️ Consejos de Uso: Cómo y Cuándo</h2>
+    <p>Para sacarle el máximo provecho y mantener tu piel segura, sigue estos consejos:</p>
+    <ul>
+        <li><b>Combinaciones recomendadas (Sinergia):</b> [Menciona con qué tipo de productos o ingredientes funciona bien. Ej: "Úsalo junto a un limpiador suave para mejores resultados"].</li>
+        <li><b>Combinaciones a evitar (Antagonismo):</b> [Menciona qué no mezclar para evitar irritación. Ej: "Evita usarlo al mismo tiempo que exfoliantes fuertes como el ácido glicólico"].</li>
+        <li><b>Momento ideal de aplicación:</b> [Mañana, noche, o ambos].</li>
+    </ul>
+
+    <hr style="border: 1px solid #f0eafc; margin: 30px 0;">
+
+    <h2>✅ Resumen Clave y Tip Experto</h2>
+    <p><b>En pocas palabras:</b> [Resume el producto en una frase: para quién es ideal y cuál es su mayor fortaleza.]</p>
+    <p><b>Tip Experto:</b> [Ofrece un dato práctico o poco conocido sobre el producto o su uso que no se haya mencionado antes.]</p>
     """
     
+    log(f"Generando newsletter para '{product.get('nombre')}'...", "info")
     try:
-        response = client.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=[
-                {"role": "system", "content": "Eres un experto en belleza con acceso a investigaciones científicas y conocimiento del mercado premium."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=2000
-        )
-        return response.choices[0].message.content.strip()
+        response = model.generate_content(prompt)
+        # Limpieza final para eliminar cualquier bloque de código Markdown
+        cleaned_html = response.text.strip()
+        if cleaned_html.startswith("```html"):
+            cleaned_html = cleaned_html[7:]
+        if cleaned_html.endswith("```"):
+            cleaned_html = cleaned_html[:-3]
+        
+        return cleaned_html.strip()
     except Exception as e:
-        log(f"Error generando contenido: {str(e)}", "error")
+        log(f"Error generando contenido con Gemini: {e}", "error")
         raise
 
 # --- Agente de Email ---
-def send_email(subject: str, body_text: str, product_url: str):
-    """Envía el newsletter premium por email"""
+def send_email(subject: str, body_html: str, product_url: str):
+    """Envía el newsletter con un diseño visualmente mágico."""
     if not all([EMAIL_SENDER, EMAIL_RECEIVER, SMTP_SERVER, SMTP_PORT, SMTP_PASS]):
-        log("Error: Credenciales incompletas", "error")
-        raise ValueError("Credenciales incompletas")
-        
+        log("Credenciales de email incompletas. No se puede enviar.", "error")
+        raise ValueError("Credenciales de email incompletas.")
+
     recipients = [email.strip() for email in EMAIL_RECEIVER.split(",")]
-    
     msg = MIMEMultipart('alternative')
-    msg['From'] = formataddr(("BB Beauty Bot Premium", EMAIL_SENDER))
+    msg['From'] = formataddr(("BB Beauty Bot ✨", EMAIL_SENDER))
     msg['To'] = ", ".join(recipients)
     msg['Subject'] = subject
-    msg['X-Priority'] = '1'
-    
-    # Versión texto
-    msg.attach(MIMEText(body_text, 'plain'))
-    
-    # Versión HTML Premium con estilos mejorados
+
+    # Paleta de colores "mágica"
+    color_bg = "#f0eafc" # Lavanda pálido
+    color_header_bg = "#3c1053" # Morado oscuro
+    color_header_text = "#ffffff" # Blanco
+    color_title = "#6a1b9a" # Morado
+    color_subtitle = "#8e24aa" # Púrpura
+    color_text = "#4a4a4a" # Gris oscuro
+    color_accent = "#d1c4e9" # Lavanda más oscuro
+
     html_content = f"""
     <html>
     <head>
+        <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
         <style>
-            body {{
-                font-family: 'Helvetica Neue', Arial, sans-serif;
-                line-height: 1.6;
-                color: #333;
-                max-width: 700px;
-                margin: 0 auto;
-                padding: 20px;
-            }}
-            .header {{
-                background: linear-gradient(135deg, #ff69b4, #d63384);
-                padding: 40px 20px;
-                text-align: center;
-                color: white;
-                border-radius: 10px 10px 0 0;
-            }}
-            .content {{
-                background: white;
-                padding: 30px;
-                border: 1px solid #eee;
-                border-radius: 0 0 10px 10px;
-            }}
-            h1 {{
-                color: #ff69b4;
-                font-size: 28px;
-                margin-bottom: 20px;
-                text-align: center;
-                text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
-            }}
-            h2 {{
-                color: #ff69b4;
-                font-size: 22px;
-                margin-top: 30px;
-                margin-bottom: 15px;
-                border-bottom: 2px solid #ff69b4;
-                padding-bottom: 5px;
-            }}
-            ul {{
-                list-style-type: none;
-                padding-left: 20px;
-            }}
-            li {{
-                margin-bottom: 10px;
-                position: relative;
-                padding-left: 25px;
-            }}
-            li:before {{
-                content: "✨";
-                position: absolute;
-                left: 0;
-            }}
-            .cta-button {{
-                display: inline-block;
-                background: #d63384;
-                color: white;
-                padding: 15px 30px;
-                text-decoration: none;
-                border-radius: 5px;
-                margin: 20px 0;
-                font-weight: bold;
-            }}
-            .footer {{
-                text-align: center;
-                margin-top: 30px;
-                color: #666;
-                font-size: 12px;
-            }}
-            .premium-badge {{
-                background: gold;
-                color: #333;
-                padding: 5px 10px;
-                border-radius: 3px;
-                font-size: 12px;
-                font-weight: bold;
-                margin-left: 10px;
-            }}
+            body {{ font-family: 'Roboto', sans-serif; margin: 0; padding: 0; background-color: {color_bg}; }}
+            .container {{ max-width: 680px; margin: 0 auto; background-color: #ffffff; }}
+            .header {{ background-color: {color_header_bg}; color: {color_header_text}; padding: 30px 20px; text-align: center; }}
+            .header h1 {{ font-family: 'Playfair Display', serif; font-size: 32px; margin: 0; }}
+            .content {{ padding: 30px; color: {color_text}; }}
+            .content h1 {{ font-family: 'Playfair Display', serif; color: {color_title}; font-size: 28px; }}
+            .content h2 {{ font-family: 'Playfair Display', serif; color: {color_subtitle}; font-size: 22px; border-bottom: 2px solid {color_accent}; padding-bottom: 5px; margin-top: 30px; }}
+            .content p {{ line-height: 1.7; }}
+            .content ul {{ list-style: none; padding-left: 0; }}
+            .content li {{ padding-left: 20px; position: relative; margin-bottom: 10px; }}
+            .content li:before {{ content: '✦'; color: {color_subtitle}; position: absolute; left: 0; font-size: 14px; }}
+            .cta-button {{ display: inline-block; background-color: {color_title}; color: #ffffff; padding: 15px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; text-align: center; }}
+            .footer {{ text-align: center; padding: 20px; font-size: 12px; color: #999; }}
         </style>
     </head>
     <body>
-        <div class="header">
-            <h1>BB Beauty Bot <span class="premium-badge">PREMIUM</span></h1>
-        </div>
-        <div class="content">
-            {body_text}
-            <div style="text-align: center;">
-                <a href="{product_url}" class="cta-button">Ver Producto Exclusivo</a>
+        <div class="container">
+            <div class="header">
+                <h1>BB Beauty Bot</h1>
             </div>
-        </div>
-        <div class="footer">
-            <p>BB Beauty Bot Premium · Análisis Exclusivo · {datetime.now().strftime('%d/%m/%Y')}</p>
+            <div class="content">
+                {body_html}
+                <div style="text-align: center;">
+                    <a href="{product_url}" class="cta-button">Descubrir el Secreto</a>
+                </div>
+            </div>
+            <div class="footer">
+                <p>Análisis exclusivo de BB Beauty Bot · {datetime.now().strftime('%Y')}</p>
+            </div>
         </div>
     </body>
     </html>
@@ -352,158 +221,60 @@ def send_email(subject: str, body_text: str, product_url: str):
             server.starttls()
             server.login(EMAIL_SENDER, SMTP_PASS)
             server.sendmail(EMAIL_SENDER, recipients, msg.as_string())
-        log("Email premium enviado")
+        log("💌 Email enviado exitosamente.", "info")
     except Exception as e:
-        log(f"Error enviando email: {str(e)}", "error")
+        log(f"Error enviando email: {e}", "error")
         raise
-
-def test_with_saved_data() -> List[str]:
-    """Prueba el sistema usando datos guardados previamente"""
-    try:
-        with open(PERPLEXITY_SAVE_FILE, 'r') as f:
-            products = json.load(f)
-            log(f"Usando {len(products)} productos guardados")
-            return [p['url'] for p in products]
-    except Exception as e:
-        log(f"Error cargando datos guardados: {str(e)}", "error")
-        return []
 
 # --- Flujo Principal ---
-def main(test_mode: bool = False):
-    log("🚀 Iniciando BB Beauty Bot - Sistema Completo")
-    state = load_state()
+def main():
+    log("🚀 Iniciando BB Beauty Bot 2.0 (Gemini Edition)", "info")
+    today = datetime.now().weekday()  # Lunes=0, Domingo=6
+
+    # <<-- CAMBIO TEMPORAL PARA PRUEBA: Forzar la ejecución como si no fuera fin de semana -->>
+    is_weekend = today >= 5
+    if False: # Original: if is_weekend:
+        log("Es fin de semana. No se envía newsletter.", "info")
+        return
+
+    # Paso 2: Búsqueda semanal si es lunes
+    if today == 0: 
+        log("Día de búsqueda. Iniciando la caza de productos innovadores...", "info")
+        if not find_products_with_gemini():
+            log("La búsqueda semanal falló. Reintentando en la próxima ejecución.", "error")
+            return
     
+    # Paso 3: Verificar si los productos de la semana existen
+    if not os.path.exists(WEEKLY_PRODUCTS_FILE):
+        log("El archivo de productos no existe. Esperando a la próxima búsqueda.", "warning")
+        return
+
+    # Paso 4: Seleccionar producto del día y enviar
     try:
-        # Verificar si es fin de semana
-        today = datetime.now().weekday()
-        if today >= 5:  # 5 es sábado, 6 es domingo
-            log("Es fin de semana, no se envía newsletter", "info")
-            return
-            
-        # Paso 1: Obtener productos (búsqueda o existentes)
-        product_urls = find_product_urls()
-        if not product_urls:
-            log("No se encontraron URLs válidas", "warning")
-            return
-            
-        # Paso 2: Seleccionar producto del día
-        try:
-            with open(PERPLEXITY_SAVE_FILE, 'r') as f:
-                products = json.load(f)
-                if today >= len(products):
-                    log("No hay suficientes productos para el día", "warning")
-                    return
-                product = products[today]  # lunes=0, martes=1, etc.
-                log(f"Seleccionado producto para {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'][today]}: {product['nombre']}")
-        except Exception as e:
-            log(f"Error cargando producto del día: {str(e)}", "error")
-            return
+        with open(WEEKLY_PRODUCTS_FILE, 'r', encoding='utf-8') as f:
+            products = json.load(f)
         
-        # Paso 3: Generar newsletter para el producto del día
-        try:
-            newsletter_content = generate_newsletter(product)
+        # <<-- CAMBIO TEMPORAL PARA PRUEBA: Forzar el envío del primer producto -->>
+        day_index = 0 # Original: day_index = today
+        if day_index >= len(products):
+            log(f"No hay producto asignado para hoy (Día {day_index+1}).", "warning")
+            return
             
-            # Crear asunto
-            subject = f"✨ BB Beauty Bot | Producto del Día: {product['marca']} {product['nombre']}"
-            
-            # Enviar email
-            send_email(
-                subject=subject,
-                body_text=newsletter_content,
-                product_url=product['url']
-            )
-            
-            log(f"✅ Newsletter enviado para: {product['nombre']}")
-            
-        except Exception as e:
-            log(f"Error generando o enviando newsletter: {str(e)}", "error")
-            raise
+        product_of_the_day = products[day_index]
+        day_name = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"][day_index]
+        log(f"Producto para el {day_name}: {product_of_the_day.get('nombre')}", "info")
+
+        # Generar y enviar el newsletter
+        newsletter_html = generate_newsletter_with_gemini(product_of_the_day)
+        subject = f"Tu Dosis de Magia Skincare del {day_name} ✨"
+        send_email(subject, newsletter_html, product_of_the_day.get('url', '#'))
         
+        log("✅ Proceso diario completado exitosamente.", "info")
+
+    except FileNotFoundError:
+        log(f"Archivo de productos no encontrado. Ejecuta la búsqueda de lunes primero.", "error")
     except Exception as e:
-        log(f"💣 Error crítico: {str(e)}", "critical")
-
-def generate_executive_summary(products: List[Dict]) -> str:
-    """Genera un resumen ejecutivo integrado de todos los productos"""
-    if not OPENAI_KEY:
-        log("Error: API key no configurada", "error")
-        raise ValueError("API key no configurada")
-        
-    products_info = "<br><br>".join([
-        f"""
-        <b>Producto:</b> {p['nombre']}<br>
-        <b>Marca:</b> {p['marca']}<br>
-        <b>Precio:</b> {p['precio']}<br>
-        <b>Tecnología:</b> {p['tecnologia']}<br>
-        <b>Descripción:</b> {p['descripcion']}<br>
-        <b>Ingredientes Clave:</b> {', '.join(p['ingredientes'])}<br>
-        <b>Beneficios:</b> {', '.join(p['beneficios'])}<br>
-        <b>Tipo de Piel:</b> {p['tipo_piel']}<br>
-        <b>Estudios Clínicos:</b> {p['estudios_clinicos']}<br>
-        <b>Sostenibilidad:</b> {p['sostenibilidad']}<br>
-        """
-        for p in products
-    ])
-    
-    prompt = f"""
-    Eres un experto en belleza con 15 años de experiencia en análisis de productos premium.
-    Crea un análisis integrado y exclusivo sobre estos productos de skincare, SOLO usando HTML puro (no uses Markdown, ni #, ni **, ni *). Usa etiquetas <h1>, <h2>, <ul>, <li>, <p> y <br> para el formato. Asegúrate de que los títulos sean claros, grandes y coloridos, y que haya buen espaciado entre secciones. No uses ningún símbolo de Markdown.
-
-    {products_info}
-
-    Estructura del análisis en formato HTML elegante:
-    <h1>Título Impactante (debe incluir "BB Beauty Bot" y ser de 8 palabras)</h1>
-    <h2>Introducción</h2>
-    <p>Tendencias del mercado y contexto de los productos</p>
-    <h2>Análisis Técnico Comparativo</h2>
-    <ul>
-        <li>Innovaciones tecnológicas destacadas</li>
-        <li>Ingredientes revolucionarios</li>
-        <li>Efectividad científica</li>
-    </ul>
-    <h2>Beneficios Integrados</h2>
-    <ul>
-        <li>Resultados esperados por tipo de piel</li>
-        <li>Diferenciadores únicos de cada producto</li>
-        <li>Casos de uso específicos</li>
-    </ul>
-    <h2>Guía de Uso Premium</h2>
-    <ul>
-        <li>Protocolos de aplicación</li>
-        <li>Combinaciones sinérgicas entre productos</li>
-        <li>Consejos de expertos</li>
-    </ul>
-    <h2>Valoración Experta</h2>
-    <ul>
-        <li>Puntos fuertes de cada producto</li>
-        <li>Áreas de mejora</li>
-        <li>Comparativa entre productos</li>
-    </ul>
-    <h2>Conclusión y Recomendaciones</h2>
-    <p>Recomendaciones personalizadas y conclusiones finales</p>
-
-    Estilo:
-    - Profesional, creativo y visualmente atractivo
-    - Títulos y subtítulos destacados con <h1> y <h2>
-    - Listas con <ul> y <li> y emojis si es relevante
-    - Usa <p> para párrafos y <br> para separar bloques de texto
-    - No uses #, *, ni ningún símbolo de Markdown
-    """
-    
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=[
-                {"role": "system", "content": "Eres un experto en belleza con acceso a investigaciones científicas y conocimiento del mercado premium."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=3000
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        log(f"Error generando resumen ejecutivo: {str(e)}", "error")
-        raise
+        log(f"💣 Error crítico en el flujo principal: {e}", "critical")
 
 if __name__ == "__main__":
-    # Para pruebas, usar test_mode=True
-    main(test_mode=True)
+    main()

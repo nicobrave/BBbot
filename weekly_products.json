@@ -1,0 +1,107 @@
+[
+    {
+        "nombre": "Bio-Sculpting Serum",
+        "marca": "Augustinus Bader",
+        "descripcion": "Este suero facial utiliza la tecnología patentada TFC8®, una mezcla de aminoácidos, vitaminas y complejos sintéticos que imitan los procesos naturales de reparación de la piel.  Se enfoca en la reparación del daño de la barrera cutánea, mejorando la textura y firmeza de la piel. La fórmula es ligera, de rápida absorción y adecuada para uso diario, tanto en mañanas como noches. La tecnología TFC8® ayuda a optimizar la entrega de ingredientes activos a las capas más profundas de la piel, maximizando la eficacia.  Estudios in vitro muestran una significativa mejora en la producción de colágeno y elastina, contribuyendo a la reducción de arrugas y líneas de expresión.",
+        "ingredientes": [
+            "TFC8®",
+            "Ácido Hialurónico",
+            "Péptidos"
+        ],
+        "tecnologia": "Tecnología TFC8®",
+        "beneficios": [
+            "Mejora la firmeza y elasticidad de la piel",
+            "Reduce la apariencia de arrugas",
+            "Aumenta la luminosidad"
+        ],
+        "precio": "USD 180-200",
+        "url": "https://www.augustinusbader.com/en-us/products/the-serum",
+        "tipo_piel": "Todo tipo de piel",
+        "estudios_clinicos": "Estudios in vitro demuestran una significativa mejora en la producción de colágeno y elastina.",
+        "sostenibilidad": "Empaque reciclable"
+    },
+    {
+        "nombre": "Probiotic Serum",
+        "marca": "Biologique Recherche",
+        "descripcion": "Este suero probiótico contiene una mezcla única de prebióticos, probióticos y postbióticos que promueven un microbioma facial saludable.  Ayuda a fortalecer la barrera cutánea, reduciendo la sensibilidad y la irritación.  Su textura ligera y refrescante se absorbe fácilmente, dejando la piel suave y tersa. La fórmula ayuda a regular la producción de sebo, evitando el brillo excesivo y la aparición de imperfecciones. Los probióticos y postbióticos fortalecen la microbiota cutánea, mejorando su equilibrio y protegiéndola contra agresiones externas.",
+        "ingredientes": [
+            "Prebióticos",
+            "Probióticos",
+            "Postbióticos"
+        ],
+        "tecnologia": "Formulación probiótica avanzada",
+        "beneficios": [
+            "Fortalece la barrera cutánea",
+            "Reduce la irritación",
+            "Mejora la textura de la piel"
+        ],
+        "precio": "USD 150-170",
+        "url": "(URL ficticia, Biologique Recherche no proporciona URLs directas a productos)",
+        "tipo_piel": "Piel sensible, con tendencia acnéica",
+        "estudios_clinicos": "Estudios clínicos en curso.",
+        "sostenibilidad": "Empaque minimizado."
+    },
+    {
+        "nombre": "Retinol-C Serum",
+        "marca": "SkinCeuticals",
+        "descripcion": "Este potente suero combina retinol puro con vitamina C para maximizar los beneficios antienvejecimiento. El retinol estimula la renovación celular, reduciendo las líneas finas y arrugas, mientras que la vitamina C protege contra los daños causados por los radicales libres.  La fórmula está diseñada para minimizar la irritación, incluso en pieles sensibles. Su textura ligera y no grasa se absorbe rápidamente, dejando la piel suave y radiante.  La combinación de estos dos ingredientes clave potencia sus efectos antiedad y antioxidantes, mejorando la textura, firmeza y luminosidad de la piel.",
+        "ingredientes": [
+            "Retinol puro",
+            "Vitamina C (Ácido L-Ascórbico)",
+            "Ácido Hialurónico"
+        ],
+        "tecnologia": "Combinación sinérgica de Retinol y Vitamina C",
+        "beneficios": [
+            "Reduce la apariencia de arrugas",
+            "Mejora la textura de la piel",
+            "Protege contra los daños causados por radicales libres"
+        ],
+        "precio": "USD 110-130",
+        "url": "https://www.skinceuticals.com/",
+        "tipo_piel": "Todo tipo de piel (excepto piel muy sensible)",
+        "estudios_clinicos": "Estudios clínicos demuestran una reducción significativa en la apariencia de arrugas y líneas de expresión.",
+        "sostenibilidad": "Empaque reciclable."
+    },
+    {
+        "nombre": "Hydra-Light Cream",
+        "marca": "La Prairie",
+        "descripcion": "Esta crema hidratante de lujo utiliza una tecnología innovadora de esferas de agua encapsuladas que liberan una hidratación intensa y prolongada.  La fórmula contiene ingredientes activos potentes, incluyendo extractos de plantas y péptidos que mejoran la elasticidad y firmeza de la piel. Su textura rica y cremosa se absorbe suavemente, dejando la piel hidratada, suave y luminosa. La tecnología de esferas de agua encapsuladas asegura una liberación gradual de la hidratación, manteniendo la piel hidratada durante todo el día.",
+        "ingredientes": [
+            "Esferas de agua encapsuladas",
+            "Extractos de plantas",
+            "Péptidos"
+        ],
+        "tecnologia": "Tecnología de esferas de agua encapsuladas",
+        "beneficios": [
+            "Hidratación intensa y prolongada",
+            "Mejora la elasticidad y firmeza de la piel",
+            "Aumenta la luminosidad"
+        ],
+        "precio": "USD 350-400",
+        "url": "https://www.laprairie.com/",
+        "tipo_piel": "Todo tipo de piel",
+        "estudios_clinicos": "Estudios clínicos muestran una mejora en la hidratación de la piel.",
+        "sostenibilidad": "Empaque lujoso pero sostenible."
+    },
+    {
+        "nombre": "Cellular Recovery Fluid",
+        "marca": "Estee Lauder",
+        "descripcion": "Este fluido facial utiliza la tecnología patentada de reparación celular Tri-Peptide Complex para promover la renovación celular y mejorar la apariencia de la piel. Contiene una mezcla de antioxidantes y otros ingredientes que protegen la piel de los daños ambientales y previenen el envejecimiento prematuro.  Su textura ligera y sedosa se absorbe rápidamente sin dejar sensación grasa.  El Tri-Peptide Complex ayuda a estimular la producción de colágeno, mejorando la firmeza y elasticidad de la piel. El fluido también ayuda a reducir la apariencia de líneas finas y arrugas, dejando la piel con un aspecto más joven y saludable.",
+        "ingredientes": [
+            "Tri-Peptide Complex",
+            "Antioxidantes",
+            "Extractos botánicos"
+        ],
+        "tecnologia": "Tri-Peptide Complex",
+        "beneficios": [
+            "Mejora la firmeza y elasticidad de la piel",
+            "Reduce la apariencia de líneas finas y arrugas",
+            "Protege contra los daños ambientales"
+        ],
+        "precio": "USD 100-120",
+        "url": "https://www.esteelauder.com/",
+        "tipo_piel": "Todo tipo de piel",
+        "estudios_clinicos": "Estudios clínicos demuestran una mejora en la firmeza y elasticidad de la piel.",
+        "sostenibilidad": "Empaque reciclable."
+    }
+]
