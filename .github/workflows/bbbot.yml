@@ -35,12 +35,15 @@ jobs:
           echo "Día de la semana: $(date +%A)"
           echo "Hora local: $(date)"
 
+      - name: Crear credentials.json desde el secreto
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: echo "$GOOGLE_CREDENTIALS" > credentials.json
+
       - name: Ejecutar BB Bot
         env:
-          OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
-          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
-          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
           SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
@@ -52,6 +55,5 @@ jobs:
         with:
           name: state
           path: |
-            state.json
-            perplexity_response.json
+            weekly_products.json
           retention-days: 7
