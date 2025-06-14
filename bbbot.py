@@ -231,9 +231,8 @@ def main():
     log("🚀 Iniciando BB Beauty Bot 2.0 (Gemini Edition)", "info")
     today = datetime.now().weekday()  # Lunes=0, Domingo=6
 
-    # <<-- CAMBIO TEMPORAL PARA PRUEBA: Forzar la ejecución como si no fuera fin de semana -->>
     is_weekend = today >= 5
-    if False: # Original: if is_weekend:
+    if is_weekend:
         log("Es fin de semana. No se envía newsletter.", "info")
         return
 
@@ -254,8 +253,7 @@ def main():
         with open(WEEKLY_PRODUCTS_FILE, 'r', encoding='utf-8') as f:
             products = json.load(f)
         
-        # <<-- CAMBIO TEMPORAL PARA PRUEBA: Forzar el envío del primer producto -->>
-        day_index = 0 # Original: day_index = today
+        day_index = today
         if day_index >= len(products):
             log(f"No hay producto asignado para hoy (Día {day_index+1}).", "warning")
             return
