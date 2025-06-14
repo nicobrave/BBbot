@@ -8,6 +8,8 @@ from email.utils import formataddr
 from dotenv import load_dotenv
 import google.generativeai as genai
 from typing import List, Dict, Optional
+import gspread
+from google.oauth2.service_account import Credentials
 
 # --- Configuración ---
 load_dotenv()
@@ -15,7 +17,7 @@ load_dotenv()
 # API Keys y Credenciales
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
-EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
+# EMAIL_RECEIVER se obtiene ahora de Google Sheets
 SMTP_SERVER = os.getenv("SMTP_SERVER")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 SMTP_PASS = os.getenv("SMTP_PASS")
@@ -24,14 +26,44 @@ SMTP_PASS = os.getenv("SMTP_PASS")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
-# Archivos
+# Archivos y Configuración de Google Sheets
 WEEKLY_PRODUCTS_FILE = "weekly_products.json"
+GOOGLE_SHEET_NAME = "Suscriptores BB Beauty Bot"
+CREDENTIALS_FILE = "credentials.json"
 
 # --- Utilidades ---
 def log(msg: str, level: str = "info"):
     """Función de logging simple que imprime en consola."""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     print(f"[{timestamp}] [{level.upper()}] {msg}")
+
+# --- Lector de Google Sheets ---
+def get_subscribers_from_sheet() -> List[str]:
+    """
+    Se conecta a Google Sheets y obtiene la lista de correos de los suscriptores.
+    Retorna una lista de strings con los correos.
+    """
+    log("Accediendo a Google Sheets para obtener suscriptores...", "info")
+    try:
+        scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+        creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=scopes)
+        client = gspread.authorize(creds)
+        
+        spreadsheet = client.open(GOOGLE_SHEET_NAME)
+        worksheet = spreadsheet.sheet1 # Accede a la primera hoja
+        
+        # Asume que los correos están en la columna 2 (B). Omite la primera fila (encabezado).
+        emails = worksheet.col_values(2)[1:]
+        
+        valid_emails = [email for email in emails if '@' in email]
+        log(f"Se encontraron {len(valid_emails)} correos válidos en la hoja de cálculo.", "info")
+        return valid_emails
+    except FileNotFoundError:
+        log(f"Error: El archivo de credenciales '{CREDENTIALS_FILE}' no fue encontrado.", "error")
+        return []
+    except Exception as e:
+        log(f"Error al conectar con Google Sheets: {e}", "error")
+        return []
 
 # --- Agente de Búsqueda con Gemini ---
 def find_products_with_gemini() -> bool:
@@ -155,17 +187,15 @@ def generate_newsletter_with_gemini(product: Dict) -> str:
         raise
 
 # --- Agente de Email ---
-def send_email(subject: str, body_html: str, product_url: str):
-    """Envía el newsletter con un diseño visualmente mágico."""
-    if not all([EMAIL_SENDER, EMAIL_RECEIVER, SMTP_SERVER, SMTP_PORT, SMTP_PASS]):
+def send_email(subject: str, body_html: str, product_url: str, recipients: List[str]):
+    """Envía el newsletter con un diseño visualmente mágico a una lista de destinatarios."""
+    if not all([EMAIL_SENDER, SMTP_SERVER, SMTP_PORT, SMTP_PASS]):
         log("Credenciales de email incompletas. No se puede enviar.", "error")
         raise ValueError("Credenciales de email incompletas.")
 
-    recipients = [email.strip() for email in EMAIL_RECEIVER.split(",")]
-    msg = MIMEMultipart('alternative')
-    msg['From'] = formataddr(("BB Beauty Bot ✨", EMAIL_SENDER))
-    msg['To'] = ", ".join(recipients)
-    msg['Subject'] = subject
+    if not recipients:
+        log("No hay destinatarios a los que enviar el correo.", "warning")
+        return
 
     # Paleta de colores "mágica"
     color_bg = "#f0eafc" # Lavanda pálido
@@ -214,14 +244,23 @@ def send_email(subject: str, body_html: str, product_url: str):
     </body>
     </html>
     """
-    msg.attach(MIMEText(html_content, 'html'))
     
+    log(f"Preparando para enviar correo a {len(recipients)} destinatarios.", "info")
     try:
         with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
             server.starttls()
             server.login(EMAIL_SENDER, SMTP_PASS)
-            server.sendmail(EMAIL_SENDER, recipients, msg.as_string())
-        log("💌 Email enviado exitosamente.", "info")
+            
+            for recipient in recipients:
+                msg = MIMEMultipart('alternative')
+                msg['From'] = formataddr(("BB Beauty Bot ✨", EMAIL_SENDER))
+                msg['To'] = recipient
+                msg['Subject'] = subject
+                msg.attach(MIMEText(html_content, 'html'))
+                server.sendmail(EMAIL_SENDER, [recipient], msg.as_string())
+                log(f"Correo enviado a {recipient}", "info")
+                
+        log(f"💌 Proceso de envío de correos completado.", "info")
     except Exception as e:
         log(f"Error enviando email: {e}", "error")
         raise
@@ -229,6 +268,13 @@ def send_email(subject: str, body_html: str, product_url: str):
 # --- Flujo Principal ---
 def main():
     log("🚀 Iniciando BB Beauty Bot 2.0 (Gemini Edition)", "info")
+    
+    # Paso 1: Obtener la lista de suscriptores
+    subscribers = get_subscribers_from_sheet()
+    if not subscribers:
+        log("No hay suscriptores para enviar el correo. Finalizando proceso.", "warning")
+        return
+
     today = datetime.now().weekday()  # Lunes=0, Domingo=6
 
     is_weekend = today >= 5
@@ -265,7 +311,7 @@ def main():
         # Generar y enviar el newsletter
         newsletter_html = generate_newsletter_with_gemini(product_of_the_day)
         subject = f"Tu Dosis de Magia Skincare del {day_name} ✨"
-        send_email(subject, newsletter_html, product_of_the_day.get('url', '#'))
+        send_email(subject, newsletter_html, product_of_the_day.get('url', '#'), subscribers)
         
         log("✅ Proceso diario completado exitosamente.", "info")
 

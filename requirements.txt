@@ -7,3 +7,8 @@ requests
 feedparser
 beautifulsoup4
 certifi
+gspread
+google-auth-oauthlib
+pandas
+lxml
+html5lib
