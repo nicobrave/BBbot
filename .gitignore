@@ -1,7 +1,9 @@
 __pycache__/
 *.pyc
 .env
-state.json
 *.log
 *.zip
 credentials.json
+/venv/
+.DS_Store
+smtp_test.py

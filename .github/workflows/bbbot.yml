@@ -2,7 +2,7 @@ name: BB Bot - Newsletter Diario
 
 on:
   schedule:
-    - cron: '30 13 * * *'  # 13:30 UTC = 9:30 Chile
+    - cron: '30 13 * * 1-5' # Lunes a Viernes a las 13:30 UTC (9:30 Chile)
   workflow_dispatch:
 
 jobs:
@@ -23,15 +23,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Verificar día de la semana
-        run: |
-          echo "Día de la semana: $(date +%A)"
-          echo "Hora local: $(date)"
+      - name: Recuperar historial
+        uses: actions/download-artifact@v4
+        with:
+          name: history
+          path: .
+        continue-on-error: true
 
       - name: Crear credentials.json desde el secreto
         env:
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
         run: echo "$GOOGLE_CREDENTIALS" > credentials.json
+
+      - name: Depurar variables de entorno
+        env:
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+        run: |
+          echo "Longitud de SMTP_PASS: ${#SMTP_PASS}"
+          echo "Las credenciales de SMTP se usarán en el siguiente paso."
 
       - name: Ejecutar BB Bot
         id: run_bot
@@ -43,14 +52,14 @@ jobs:
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
         run: |
-          python bbbot.py || echo "BBBot terminó con código $? (registrado pero el flujo continuará para guardar estado)"
+          python bbbot.py
 
       - name: Guardar historial actualizado
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: products
+          name: history
           path: |
             weekly_products.json
             product_history.json
-          retention-days: 30
+          retention-days: 90
