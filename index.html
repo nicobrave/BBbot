@@ -136,9 +136,46 @@
         }
         
         .footer {
-            margin-top: 30px;
-            font-size: 0.8rem;
-            color: #b3a7c4;
+            padding: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+        }
+        .footer a {
+            color: #fff;
+            text-decoration: none;
+            margin: 0 10px;
+            transition: color 0.3s ease;
+        }
+        .footer a:hover {
+            color: #f0eafc;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                height: auto;
+                min-height: 100vh;
+                overflow-y: auto; /* Permite scroll en móvil */
+            }
+            .glassmorphism {
+                width: 90%;
+                padding: 30px;
+                margin-top: 10vh; /* Ajuste para que no esté tan arriba */
+            }
+            h1 {
+                font-size: 2.5rem;
+            }
+            .subtitle {
+                font-size: 1rem;
+            }
+            .footer {
+                position: relative; /* O static, para que quede al final del contenido */
+                margin-top: 40px;
+            }
         }
     </style>
 </head>
@@ -164,7 +201,9 @@
         </main>
         
         <footer class="footer">
-            <p>&copy; 2025 BB Beauty Bot por recomai.cl</p>
+            <a href="mailto:bbbot@recomai.cl">Contacto</a> |
+            <a href="privacy.html" target="_blank">Política de Privacidad</a> |
+            <a href="terms.html" target="_blank">Términos y Condiciones</a>
         </footer>
     </div>
 

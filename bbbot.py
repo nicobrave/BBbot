@@ -276,9 +276,7 @@ def send_email(subject: str, body_html: str, product_url: str, recipients: List[
             </div>
             <div class="content">
                 {body_html}
-                <div style="text-align: center;">
-                    <a href="{product_url}" class="cta-button">Descubrir el Secreto</a>
-                </div>
+                {'<div style="text-align: center;"><a href="' + product_url + '" class="cta-button">Descubrir el Secreto</a></div>' if product_url and product_url != '#' else ''}
             </div>
             <div class="footer">
                 <p>Análisis exclusivo de BB Beauty Bot · {datetime.now().strftime('%Y')}</p>
