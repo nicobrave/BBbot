@@ -41,6 +41,8 @@ jobs:
         run: echo "$GOOGLE_CREDENTIALS" > credentials.json
 
       - name: Ejecutar BB Bot
+        id: run_bot
+        continue-on-error: true
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
@@ -48,12 +50,14 @@ jobs:
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
         run: |
-          python bbbot.py
+          python bbbot.py || echo "BBBot terminó con código $? (registrado pero el flujo continuará para guardar estado)"
 
       - name: Guardar historial actualizado
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: state
           path: |
             weekly_products.json
+            product_history.json
           retention-days: 7

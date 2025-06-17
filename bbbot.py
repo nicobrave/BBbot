@@ -10,6 +10,7 @@ import google.generativeai as genai
 from typing import List, Dict, Optional
 import gspread
 from google.oauth2.service_account import Credentials
+import ssl
 
 # --- Configuración ---
 load_dotenv()
@@ -30,6 +31,7 @@ if GEMINI_API_KEY:
 WEEKLY_PRODUCTS_FILE = "weekly_products.json"
 GOOGLE_SHEET_NAME = "Suscriptores BB Beauty Bot"
 CREDENTIALS_FILE = "credentials.json"
+HISTORY_FILE = "product_history.json"
 
 # --- Utilidades ---
 def log(msg: str, level: str = "info"):
@@ -83,6 +85,16 @@ def find_products_with_gemini() -> bool:
         return False
 
     model = genai.GenerativeModel('gemini-1.5-flash')
+
+    # Cargar historial previo para no repetir productos
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, 'r', encoding='utf-8') as hf:
+            history: List[Dict] = json.load(hf)
+    else:
+        history = []
+
+    seen_keys = {p.get('url') or p.get('nombre') for p in history}
+
     prompt = """
     Eres un experto en investigación de mercado de skincare de lujo.
     Realiza una investigación profunda y encuentra los 5 productos de skincare más innovadores y prometedores del último año (2024-2025).
@@ -107,19 +119,43 @@ def find_products_with_gemini() -> bool:
     
     log("Iniciando búsqueda de productos con Gemini...", "info")
     try:
-        response = model.generate_content(prompt)
-        # Limpiar la respuesta para asegurar que sea un JSON válido
-        cleaned_response = response.text.strip().replace("```json", "").replace("```", "")
-        products = json.loads(cleaned_response)
+        unique_products: List[Dict] = []
+        attempts = 0
 
-        if isinstance(products, list) and len(products) > 0:
-            with open(WEEKLY_PRODUCTS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(products, f, indent=4, ensure_ascii=False)
-            log(f"Búsqueda exitosa. Se guardaron {len(products)} productos.", "info")
-            return True
-        else:
-            log("La respuesta de Gemini no contenía una lista de productos válida.", "error")
+        while len(unique_products) < 5 and attempts < 5:
+            response = model.generate_content(prompt)
+            # Limpiar la respuesta para asegurar que sea un JSON válido
+            cleaned_response = response.text.strip().replace("```json", "").replace("```", "")
+            try:
+                products_batch = json.loads(cleaned_response)
+            except json.JSONDecodeError:
+                log("La respuesta de Gemini no era JSON válido. Reintentando...", "warning")
+                attempts += 1
+                continue
+
+            for prod in products_batch:
+                key = prod.get('url') or prod.get('nombre')
+                if key and key not in seen_keys and len(unique_products) < 5:
+                    unique_products.append(prod)
+                    seen_keys.add(key)
+
+            attempts += 1
+
+        if len(unique_products) < 5:
+            log("No se pudieron obtener 5 productos únicos tras múltiples intentos.", "error")
             return False
+
+        # Guardar la lista semanal
+        with open(WEEKLY_PRODUCTS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(unique_products, f, indent=4, ensure_ascii=False)
+
+        # Actualizar historial global
+        history.extend(unique_products)
+        with open(HISTORY_FILE, 'w', encoding='utf-8') as hf:
+            json.dump(history, hf, indent=4, ensure_ascii=False)
+
+        log(f"Búsqueda exitosa. Se guardaron {len(unique_products)} productos únicos.", "info")
+        return True
 
     except Exception as e:
         log(f"Error durante la búsqueda con Gemini: {e}", "error")
@@ -254,8 +290,18 @@ def send_email(subject: str, body_html: str, product_url: str, recipients: List[
     
     log(f"Preparando para enviar correo a {len(recipients)} destinatarios.", "info")
     try:
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-            server.starttls()
+        # Determinar si se debe usar SSL directo o STARTTLS en función del puerto
+        use_ssl = SMTP_PORT == 465
+        if use_ssl:
+            context = ssl.create_default_context()
+            smtp_client = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, context=context, timeout=30)
+        else:
+            smtp_client = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30)
+
+        with smtp_client as server:
+            if not use_ssl:
+                # Negociar STARTTLS sólo si no estamos ya en SSL
+                server.starttls(context=ssl.create_default_context())
             server.login(EMAIL_SENDER, SMTP_PASS)
             
             for recipient in recipients:
